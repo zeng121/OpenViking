@@ -19,19 +19,25 @@ logger = logging.getLogger(__name__)
 
 
 class OpenAIDenseEmbedder(DenseEmbedderBase):
-    """OpenAI Dense Embedder Implementation
+    """OpenAI / Azure OpenAI Dense Embedder Implementation
 
-    Supports OpenAI embedding models such as text-embedding-3-small, text-embedding-3-large, etc.
+    Supports both OpenAI and Azure OpenAI embedding models via the ``provider`` parameter.
 
-    Example:
+    Examples:
+        OpenAI:
         >>> embedder = OpenAIDenseEmbedder(
         ...     model_name="text-embedding-3-small",
         ...     api_key="sk-xxx",
-        ...     dimension=1536
+        ...     provider="openai",
         ... )
-        >>> result = embedder.embed("Hello world")
-        >>> print(len(result.dense_vector))
-        1536
+
+        Azure OpenAI:
+        >>> embedder = OpenAIDenseEmbedder(
+        ...     model_name="text-embedding-3-large",
+        ...     api_key="azure-key",
+        ...     api_base="https://xxx.openai.azure.com",
+        ...     provider="azure",
+        ... )
     """
 
     def __init__(
@@ -39,37 +45,49 @@ class OpenAIDenseEmbedder(DenseEmbedderBase):
         model_name: str = "text-embedding-3-small",
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
+        api_version: Optional[str] = None,
         dimension: Optional[int] = None,
         config: Optional[Dict[str, Any]] = None,
         max_tokens: Optional[int] = None,
+        provider: str = "openai",
     ):
         """Initialize OpenAI Dense Embedder
 
         Args:
-            model_name: OpenAI model name, defaults to text-embedding-3-small
-            api_key: API key, if None will read from env vars (OPENVIKING_EMBEDDING_API_KEY or OPENAI_API_KEY)
-            api_base: API base URL, optional
+            model_name: Model name or Azure deployment name
+            api_key: API key
+            api_base: API base URL (OpenAI) or Azure endpoint (Azure)
+            api_version: Azure OpenAI API version, defaults to "2025-01-01-preview"
             dimension: Dimension (if model supports), optional
             config: Additional configuration dict
             max_tokens: Maximum token count per embedding request, None to use default (8000)
+            provider: "openai" for OpenAI, "azure" for Azure OpenAI
 
         Raises:
-            ValueError: If api_key is not provided and env vars are not set
+            ValueError: If api_key is not provided
         """
         super().__init__(model_name, config, max_tokens=max_tokens)
 
         self.api_key = api_key
         self.api_base = api_base
+        self.api_version = api_version
         self.dimension = dimension
+        self._provider = provider.lower()
 
         if not self.api_key:
             raise ValueError("api_key is required")
 
-        # Initialize OpenAI client
-        client_kwargs = {"api_key": self.api_key}
-        if self.api_base:
-            client_kwargs["base_url"] = self.api_base
-        self.client = openai.OpenAI(**client_kwargs)
+        client_kwargs: Dict[str, Any] = {"api_key": self.api_key}
+        if self._provider == "azure":
+            if not self.api_base:
+                raise ValueError("api_base (Azure endpoint) is required for Azure provider")
+            client_kwargs["azure_endpoint"] = self.api_base
+            client_kwargs["api_version"] = self.api_version or "2025-01-01-preview"
+            self.client = openai.AzureOpenAI(**client_kwargs)
+        else:
+            if self.api_base:
+                client_kwargs["base_url"] = self.api_base
+            self.client = openai.OpenAI(**client_kwargs)
 
         # Initialize tiktoken encoder
         self._tiktoken_enc = None

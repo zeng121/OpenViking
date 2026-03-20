@@ -26,6 +26,11 @@ class VLMConfig(BaseModel):
 
     default_provider: Optional[str] = Field(default=None, description="Default provider name")
 
+    api_version: Optional[str] = Field(
+        default=None,
+        description="API version for Azure OpenAI. Auto-detected when api_base is an Azure endpoint.",
+    )
+
     thinking: bool = Field(default=False, description="Enable thinking mode for VolcEngine models")
 
     max_concurrent: int = Field(
@@ -134,6 +139,7 @@ class VLMConfig(BaseModel):
             "max_retries": self.max_retries,
             "provider": name,
             "thinking": self.thinking,
+            "api_version": self.api_version,
         }
 
         if config:

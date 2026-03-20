@@ -16,7 +16,7 @@ class EmbeddingModelConfig(BaseModel):
     input: str = Field(default="multimodal", description="Input type: 'text' or 'multimodal'")
     provider: Optional[str] = Field(
         default="volcengine",
-        description="Provider type: 'openai', 'volcengine', 'vikingdb', 'jina'",
+        description="Provider type: 'openai', 'azure', 'volcengine', 'vikingdb', 'jina'",
     )
     backend: Optional[str] = Field(
         default="volcengine",
@@ -30,6 +30,10 @@ class EmbeddingModelConfig(BaseModel):
     max_tokens: Optional[int] = Field(
         default=None,
         description="Maximum token count per embedding request. If None, uses model default (e.g., 8000 for OpenAI).",
+    )
+    api_version: Optional[str] = Field(
+        default=None,
+        description="API version for Azure OpenAI. Auto-detected when api_base is an Azure endpoint.",
     )
 
     model_config = {"extra": "forbid"}
@@ -57,15 +61,18 @@ class EmbeddingModelConfig(BaseModel):
         if not self.provider:
             raise ValueError("Embedding provider is required")
 
-        if self.provider not in ["openai", "volcengine", "vikingdb", "jina"]:
+        if self.provider not in ["openai", "azure", "volcengine", "vikingdb", "jina"]:
             raise ValueError(
-                f"Invalid embedding provider: '{self.provider}'. Must be one of: 'openai', 'volcengine', 'vikingdb', 'jina'"
+                f"Invalid embedding provider: '{self.provider}'. "
+                "Must be one of: 'openai', 'azure', 'volcengine', 'vikingdb', 'jina'"
             )
 
         # Provider-specific validation
-        if self.provider == "openai":
+        if self.provider in ("openai", "azure"):
             if not self.api_key:
-                raise ValueError("OpenAI provider requires 'api_key' to be set")
+                raise ValueError(f"{self.provider.capitalize()} provider requires 'api_key' to be set")
+            if self.provider == "azure" and not self.api_base:
+                raise ValueError("Azure provider requires 'api_base' (Azure endpoint) to be set")
 
         elif self.provider == "volcengine":
             if not self.api_key:
@@ -156,8 +163,22 @@ class EmbeddingConfig(BaseModel):
                     "model_name": cfg.model,
                     "api_key": cfg.api_key,
                     "api_base": cfg.api_base,
+                    "api_version": cfg.api_version,
                     "dimension": cfg.dimension,
                     "max_tokens": cfg.max_tokens,
+                    "provider": "openai",
+                },
+            ),
+            ("azure", "dense"): (
+                OpenAIDenseEmbedder,
+                lambda cfg: {
+                    "model_name": cfg.model,
+                    "api_key": cfg.api_key,
+                    "api_base": cfg.api_base,
+                    "api_version": cfg.api_version,
+                    "dimension": cfg.dimension,
+                    "max_tokens": cfg.max_tokens,
+                    "provider": "azure",
                 },
             ),
             ("volcengine", "dense"): (

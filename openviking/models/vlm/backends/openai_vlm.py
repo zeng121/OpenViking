@@ -14,13 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 class OpenAIVLM(VLMBase):
-    """OpenAI VLM backend"""
+    """OpenAI / Azure OpenAI VLM backend"""
 
     def __init__(self, config: Dict[str, Any]):
         super().__init__(config)
         self._sync_client = None
         self._async_client = None
-        self.provider = "openai"
+        self.api_version = config.get("api_version")
 
     def get_client(self):
         """Get sync client"""
@@ -29,7 +29,16 @@ class OpenAIVLM(VLMBase):
                 import openai
             except ImportError:
                 raise ImportError("Please install openai: pip install openai")
-            self._sync_client = openai.OpenAI(api_key=self.api_key, base_url=self.api_base)
+            if self.provider == "azure":
+                self._sync_client = openai.AzureOpenAI(
+                    api_key=self.api_key,
+                    azure_endpoint=self.api_base,
+                    api_version=self.api_version or "2025-01-01-preview",
+                )
+            else:
+                self._sync_client = openai.OpenAI(
+                    api_key=self.api_key, base_url=self.api_base
+                )
         return self._sync_client
 
     def get_async_client(self):
@@ -39,7 +48,16 @@ class OpenAIVLM(VLMBase):
                 import openai
             except ImportError:
                 raise ImportError("Please install openai: pip install openai")
-            self._async_client = openai.AsyncOpenAI(api_key=self.api_key, base_url=self.api_base)
+            if self.provider == "azure":
+                self._async_client = openai.AsyncAzureOpenAI(
+                    api_key=self.api_key,
+                    azure_endpoint=self.api_base,
+                    api_version=self.api_version or "2025-01-01-preview",
+                )
+            else:
+                self._async_client = openai.AsyncOpenAI(
+                    api_key=self.api_key, base_url=self.api_base
+                )
         return self._async_client
 
     def _update_token_usage_from_response(self, response):
